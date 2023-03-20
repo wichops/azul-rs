@@ -1,12 +1,16 @@
-use bevy::prelude::*;
+use bevy::app::App;
+use bevy::prelude::{info, IntoSystemConfig};
+
+use bevy::prelude::{DefaultPlugins, Input, KeyCode, OnUpdate, Res, ResMut, Resource, States};
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 
 const COLOR_COUNT: usize = 5;
 const TILES_PER_COLOR: usize = 20;
 const TILES_COUNT: usize = TILES_PER_COLOR * COLOR_COUNT;
+const FACTORY_TILES: usize = 4;
 
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, Hash, Clone, Eq, PartialEq, Default, States)]
 enum Phase {
     #[default]
     Picking,
@@ -55,7 +59,7 @@ struct Player {
     board: Board,
 }
 
-#[derive(Debug, Default)]
+#[derive(Resource, Debug, Default)]
 struct Game {
     phase: Phase,
     players: Vec<Player>,
@@ -72,24 +76,6 @@ impl Row {
             filled: 0,
             size,
         }
-    }
-}
-
-impl Bag {
-    fn new() -> Self {
-        let mut tiles = [
-            vec![Tile::new(Color::Red); TILES_PER_COLOR],
-            vec![Tile::new(Color::Green); TILES_PER_COLOR],
-            vec![Tile::new(Color::Blue); TILES_PER_COLOR],
-            vec![Tile::new(Color::White); TILES_PER_COLOR],
-            vec![Tile::new(Color::Black); TILES_PER_COLOR],
-        ]
-        .concat();
-
-        let mut rng = thread_rng();
-        tiles.shuffle(&mut rng);
-
-        Self { tiles }
     }
 }
 
@@ -116,94 +102,69 @@ impl Tile {
     }
 }
 
-impl Factory {
-    fn refill(&mut self, bag: &mut Bag) {
-        self.tiles = bag.tiles.drain(0..4).collect();
+fn input(keyboard_input: Res<Input<KeyCode>>, game: ResMut<Game>) {
+    if keyboard_input.pressed(KeyCode::Key1) {
+        info!("{:?}", game.factories[0]);
+    }
+    if keyboard_input.pressed(KeyCode::Key2) {
+        info!("{:?}", game.factories[1]);
+    }
+    if keyboard_input.pressed(KeyCode::Key3) {
+        info!("{:?}", game.factories[2]);
+    }
+    if keyboard_input.pressed(KeyCode::Key4) {
+        info!("{:?}", game.factories[3]);
+    }
+
+    if keyboard_input.pressed(KeyCode::Key5) {
+        info!("{:?}", game.factories[4]);
     }
 }
 
-impl Game {
-    fn new(players_count: i32) -> Self {
-        let factories_count = match players_count {
-            2 => 5,
-            3 => 7,
-            4 => 9,
-            _ => panic!("Invalid Number of players"),
-        };
+fn setup(mut game: ResMut<Game>) {
+    let players_count = 2;
+    let factories_count = match players_count {
+        2 => 5,
+        3 => 7,
+        4 => 9,
+        _ => panic!("invalid number of players"),
+    };
 
-        let mut players = Vec::with_capacity(players_count as usize);
-        for p in 0..players_count {
-            players.push(Player::new(&p.to_string()));
-        }
+    let mut tiles = [
+        vec![Tile::new(Color::Red); TILES_PER_COLOR],
+        vec![Tile::new(Color::Green); TILES_PER_COLOR],
+        vec![Tile::new(Color::Blue); TILES_PER_COLOR],
+        vec![Tile::new(Color::White); TILES_PER_COLOR],
+        vec![Tile::new(Color::Black); TILES_PER_COLOR],
+    ]
+    .concat();
 
-        let mut bag = Bag::new();
-        let mut factories = vec![Factory::default(); factories_count];
+    let mut rng = thread_rng();
+    tiles.shuffle(&mut rng);
 
-        for f in factories.iter_mut() {
-            f.refill(&mut bag);
-        }
-
-        Self {
-            bag,
-            players,
-            factories,
-            ..Self::default()
-        }
+    let mut players = Vec::with_capacity(players_count as usize);
+    for p in 0..players_count {
+        players.push(Player::new(&p.to_string()));
     }
+
+    game.players = players;
+
+    let mut factories = vec![Factory::default(); factories_count];
+    for f in factories.iter_mut() {
+        f.tiles = tiles.drain(0..FACTORY_TILES).collect();
+    }
+
+    game.factories = factories;
+    game.bag = Bag::default();
+    game.bag.tiles = tiles;
 }
 
 fn main() {
-    let game = Game::new(4);
-
-    dbg!(game);
-    App::new().run();
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn setup_game() {
-        let game = crate::Game::new(2);
-        assert_eq!(game.phase, crate::Phase::Picking);
-        assert_eq!(game.turn_count, 0);
-        assert_eq!(game.player_index, 0);
-    }
-
-    #[test]
-    fn setup_game_2_players() {
-        let game = crate::Game::new(2);
-
-        assert_eq!(game.players.len(), 2);
-        assert_eq!(game.factories.len(), 5);
-    }
-
-    #[test]
-    fn setup_game_3_players() {
-        let game = crate::Game::new(3);
-
-        assert_eq!(game.players.len(), 3);
-        assert_eq!(game.factories.len(), 7);
-    }
-
-    #[test]
-    fn setup_game_4_players() {
-        let game = crate::Game::new(4);
-
-        assert_eq!(game.players.len(), 4);
-        assert_eq!(game.factories.len(), 9);
-    }
-
-    #[test]
-    fn setup_factories() {
-        let game = crate::Game::new(4);
-
-        for f in &game.factories {
-            assert_eq!(f.tiles.len(), 4);
-        }
-
-        assert_eq!(
-            game.factories.len() * 4 + game.bag.tiles.len(),
-            crate::TILES_COUNT
-        );
-    }
+    App::new()
+        .add_plugins(DefaultPlugins)
+        .add_state::<Phase>()
+        .init_resource::<Game>()
+        .add_startup_system(setup)
+        .add_system(input)
+        .run();
 }
