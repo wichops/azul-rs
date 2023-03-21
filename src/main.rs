@@ -5,9 +5,7 @@ use bevy::prelude::*;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 
-const COLOR_COUNT: usize = 5;
 const TILES_PER_COLOR: usize = 20;
-const TILES_COUNT: usize = TILES_PER_COLOR * COLOR_COUNT;
 const FACTORY_TILES: usize = 4;
 
 #[derive(Debug, Hash, Clone, Eq, PartialEq, Default, States)]
@@ -62,12 +60,11 @@ struct Player {
 
 #[derive(Resource, Debug, Default)]
 struct Game {
-    phase: GameState,
     players: Vec<Player>,
     factories: Vec<Factory>,
+    center: Vec<Tile>,
     bag: Bag,
     selected_factory: usize,
-    turn_count: usize,
     player_index: usize,
 }
 
@@ -82,9 +79,9 @@ impl Row {
 }
 
 impl Player {
-    fn new(name: &str) -> Self {
+    fn new(name: String) -> Self {
         Player {
-            name: name.to_string(),
+            name,
             board: Board {
                 rows: [
                     Row::new(1),
@@ -103,9 +100,6 @@ impl Tile {
         Self { color }
     }
 }
-
-struct PickTile;
-struct PickFactory;
 
 fn select_factory(
     mut keyboard_input: ResMut<Input<KeyCode>>,
@@ -163,6 +157,7 @@ fn select_color(
         color = Some(Color::Blue);
     }
 
+    let mut removed_tiles = Vec::new();
     if let Some(color) = color {
         let selected_factory = game.selected_factory;
 
@@ -178,15 +173,26 @@ fn select_color(
                 }
             }
 
+            removed_tiles = factory.tiles.drain(..).collect();
+
             let player_index = game.player_index;
             let player = game.players.get_mut(player_index).unwrap();
             let rows = &mut player.board.rows;
+            // TODO: This 4 is hardcoded get input for board row
             let row = &mut rows[4];
 
             row.color = Some(color);
             row.filled = std::cmp::min(row.size, moved_tiles);
         }
-        next_state.set(GameState::Tiling);
+
+        game.center.append(&mut removed_tiles);
+        game.player_index += 1;
+
+        if game.player_index > game.players.len() {
+            game.player_index = 0;
+        }
+
+        next_state.set(GameState::PickingFactory);
     }
 }
 
@@ -213,7 +219,7 @@ fn setup(mut game: ResMut<Game>) {
 
     let mut players = Vec::with_capacity(players_count as usize);
     for p in 0..players_count {
-        players.push(Player::new(&p.to_string()));
+        players.push(Player::new(format!("Player {}", p + 1)));
     }
 
     game.players = players;
@@ -229,11 +235,14 @@ fn setup(mut game: ResMut<Game>) {
 }
 
 fn instructions(game: Res<Game>) {
-    info!("Select Factory 1 - 5");
+    println!("Player: {}", game.player_index + 1);
+    println!("Select Factory 1 - 8");
     for (i, f) in game.factories.iter().enumerate() {
-        info!("Factory: {}", i + 1);
-        info!("{:?}", f.tiles);
+        println!("Factory: {}", i + 1);
+        println!("{:?}", f.tiles);
     }
+    println!("Center:");
+    println!("{:?}", game.center);
 }
 
 fn color_instructions(game: Res<Game>) {
@@ -254,6 +263,6 @@ fn main() {
         .add_system(select_factory.in_set(OnUpdate(GameState::PickingFactory)))
         .add_system(color_instructions.in_schedule(OnEnter(GameState::PickingColor)))
         .add_system(select_color.in_set(OnUpdate(GameState::PickingColor)))
-        .add_system(xd.in_schedule(OnEnter(GameState::Tiling)))
+        .add_system(xd.in_schedule(OnExit(GameState::PickingColor)))
         .run();
 }
