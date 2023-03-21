@@ -1,7 +1,7 @@
 use bevy::app::App;
 use bevy::prelude::{info, IntoSystemConfig};
 
-use bevy::prelude::{DefaultPlugins, Input, KeyCode, OnUpdate, Res, ResMut, Resource, States};
+use bevy::prelude::*;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 
@@ -11,13 +11,14 @@ const TILES_COUNT: usize = TILES_PER_COLOR * COLOR_COUNT;
 const FACTORY_TILES: usize = 4;
 
 #[derive(Debug, Hash, Clone, Eq, PartialEq, Default, States)]
-enum Phase {
+enum GameState {
     #[default]
-    Picking,
+    PickingFactory,
+    PickingColor,
     Tiling,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 enum Color {
     Black,
     White,
@@ -61,10 +62,11 @@ struct Player {
 
 #[derive(Resource, Debug, Default)]
 struct Game {
-    phase: Phase,
+    phase: GameState,
     players: Vec<Player>,
     factories: Vec<Factory>,
     bag: Bag,
+    selected_factory: usize,
     turn_count: usize,
     player_index: usize,
 }
@@ -102,22 +104,89 @@ impl Tile {
     }
 }
 
-fn input(keyboard_input: Res<Input<KeyCode>>, game: ResMut<Game>) {
-    if keyboard_input.pressed(KeyCode::Key1) {
+struct PickTile;
+struct PickFactory;
+
+fn select_factory(
+    mut keyboard_input: ResMut<Input<KeyCode>>,
+    mut game: ResMut<Game>,
+    mut next_state: ResMut<NextState<GameState>>,
+) {
+    if keyboard_input.clear_just_pressed(KeyCode::Key1) {
+        game.selected_factory = 0;
+        next_state.set(GameState::PickingColor);
         info!("{:?}", game.factories[0]);
     }
-    if keyboard_input.pressed(KeyCode::Key2) {
+    if keyboard_input.clear_just_pressed(KeyCode::Key2) {
+        game.selected_factory = 1;
+        next_state.set(GameState::PickingColor);
         info!("{:?}", game.factories[1]);
     }
-    if keyboard_input.pressed(KeyCode::Key3) {
+    if keyboard_input.clear_just_pressed(KeyCode::Key3) {
+        game.selected_factory = 2;
+        next_state.set(GameState::PickingColor);
         info!("{:?}", game.factories[2]);
     }
-    if keyboard_input.pressed(KeyCode::Key4) {
+    if keyboard_input.clear_just_pressed(KeyCode::Key4) {
+        game.selected_factory = 3;
+        next_state.set(GameState::PickingColor);
         info!("{:?}", game.factories[3]);
     }
 
-    if keyboard_input.pressed(KeyCode::Key5) {
+    if keyboard_input.clear_just_pressed(KeyCode::Key5) {
+        game.selected_factory = 4;
+        next_state.set(GameState::PickingColor);
         info!("{:?}", game.factories[4]);
+    }
+}
+
+fn select_color(
+    mut keyboard_input: ResMut<Input<KeyCode>>,
+    mut game: ResMut<Game>,
+    mut next_state: ResMut<NextState<GameState>>,
+) {
+    let mut color = None;
+    if keyboard_input.clear_just_pressed(KeyCode::Key1) {
+        color = Some(Color::Black);
+    }
+    if keyboard_input.clear_just_pressed(KeyCode::Key2) {
+        color = Some(Color::White);
+    }
+    if keyboard_input.clear_just_pressed(KeyCode::Key3) {
+        color = Some(Color::Red);
+    }
+    if keyboard_input.clear_just_pressed(KeyCode::Key4) {
+        color = Some(Color::Green);
+    }
+
+    if keyboard_input.clear_just_pressed(KeyCode::Key5) {
+        color = Some(Color::Blue);
+    }
+
+    if let Some(color) = color {
+        let selected_factory = game.selected_factory;
+
+        if let Some(factory) = game.factories.get_mut(selected_factory) {
+            let mut moved_tiles = 0;
+            let mut i = 0;
+            while i < factory.tiles.len() {
+                if factory.tiles[i].color == color {
+                    factory.tiles.remove(i);
+                    moved_tiles += 1;
+                } else {
+                    i += 1;
+                }
+            }
+
+            let player_index = game.player_index;
+            let player = game.players.get_mut(player_index).unwrap();
+            let rows = &mut player.board.rows;
+            let row = &mut rows[4];
+
+            row.color = Some(color);
+            row.filled = std::cmp::min(row.size, moved_tiles);
+        }
+        next_state.set(GameState::Tiling);
     }
 }
 
@@ -159,12 +228,32 @@ fn setup(mut game: ResMut<Game>) {
     game.bag.tiles = tiles;
 }
 
+fn instructions(game: Res<Game>) {
+    info!("Select Factory 1 - 5");
+    for (i, f) in game.factories.iter().enumerate() {
+        info!("Factory: {}", i + 1);
+        info!("{:?}", f.tiles);
+    }
+}
+
+fn color_instructions(game: Res<Game>) {
+    info!("Select Color 1- 5");
+    info!("{:?}", game.factories[game.selected_factory].tiles);
+}
+
+fn xd(game: Res<Game>) {
+    dbg!("{}", game);
+}
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_state::<Phase>()
+        .add_state::<GameState>()
         .init_resource::<Game>()
-        .add_startup_system(setup)
-        .add_system(input)
+        .add_system(setup.on_startup())
+        .add_system(instructions.in_schedule(OnEnter(GameState::PickingFactory)))
+        .add_system(select_factory.in_set(OnUpdate(GameState::PickingFactory)))
+        .add_system(color_instructions.in_schedule(OnEnter(GameState::PickingColor)))
+        .add_system(select_color.in_set(OnUpdate(GameState::PickingColor)))
+        .add_system(xd.in_schedule(OnEnter(GameState::Tiling)))
         .run();
 }
