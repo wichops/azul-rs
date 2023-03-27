@@ -1,5 +1,5 @@
 use bevy::app::App;
-use bevy::prelude::{info, IntoSystemConfig};
+use bevy::sprite::MaterialMesh2dBundle;
 
 use bevy::prelude::*;
 use rand::seq::SliceRandom;
@@ -17,9 +17,10 @@ enum GameState {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-enum Color {
+enum TileColor {
     Black,
     White,
+
     Red,
     Green,
     Blue,
@@ -27,7 +28,7 @@ enum Color {
 
 #[derive(Debug, Clone)]
 struct Tile {
-    color: Color,
+    color: TileColor,
 }
 
 #[derive(Debug, Default)]
@@ -42,7 +43,7 @@ struct Factory {
 
 #[derive(Debug)]
 struct Row {
-    color: Option<Color>,
+    color: Option<TileColor>,
     filled: usize,
     size: usize,
 }
@@ -96,7 +97,7 @@ impl Player {
 }
 
 impl Tile {
-    fn new(color: Color) -> Self {
+    fn new(color: TileColor) -> Self {
         Self { color }
     }
 }
@@ -141,20 +142,20 @@ fn select_color(
 ) {
     let mut color = None;
     if keyboard_input.clear_just_pressed(KeyCode::Key1) {
-        color = Some(Color::Black);
+        color = Some(TileColor::Black);
     }
     if keyboard_input.clear_just_pressed(KeyCode::Key2) {
-        color = Some(Color::White);
+        color = Some(TileColor::White);
     }
     if keyboard_input.clear_just_pressed(KeyCode::Key3) {
-        color = Some(Color::Red);
+        color = Some(TileColor::Red);
     }
     if keyboard_input.clear_just_pressed(KeyCode::Key4) {
-        color = Some(Color::Green);
+        color = Some(TileColor::Green);
     }
 
     if keyboard_input.clear_just_pressed(KeyCode::Key5) {
-        color = Some(Color::Blue);
+        color = Some(TileColor::Blue);
     }
 
     let mut removed_tiles = Vec::new();
@@ -196,7 +197,12 @@ fn select_color(
     }
 }
 
-fn setup(mut game: ResMut<Game>) {
+fn setup(
+    mut commands: Commands,
+    mut game: ResMut<Game>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+) {
     let players_count = 2;
     let factories_count = match players_count {
         2 => 5,
@@ -206,11 +212,11 @@ fn setup(mut game: ResMut<Game>) {
     };
 
     let mut tiles = [
-        vec![Tile::new(Color::Red); TILES_PER_COLOR],
-        vec![Tile::new(Color::Green); TILES_PER_COLOR],
-        vec![Tile::new(Color::Blue); TILES_PER_COLOR],
-        vec![Tile::new(Color::White); TILES_PER_COLOR],
-        vec![Tile::new(Color::Black); TILES_PER_COLOR],
+        vec![Tile::new(TileColor::Red); TILES_PER_COLOR],
+        vec![Tile::new(TileColor::Green); TILES_PER_COLOR],
+        vec![Tile::new(TileColor::Blue); TILES_PER_COLOR],
+        vec![Tile::new(TileColor::White); TILES_PER_COLOR],
+        vec![Tile::new(TileColor::Black); TILES_PER_COLOR],
     ]
     .concat();
 
@@ -232,6 +238,24 @@ fn setup(mut game: ResMut<Game>) {
     game.factories = factories;
     game.bag = Bag::default();
     game.bag.tiles = tiles;
+
+    commands.spawn(Camera2dBundle::default());
+
+    let step: f32 = 360.0 / factories_count as f32;
+    for (i, _) in game.factories[..].iter().enumerate() {
+        let radius: f32 = 200.0;
+        let angle = (step * i as f32).to_radians();
+
+        let x = angle.cos() * radius;
+        let y = angle.sin() * radius;
+
+        commands.spawn(MaterialMesh2dBundle {
+            mesh: meshes.add(shape::Circle::new(80.).into()).into(),
+            material: materials.add(ColorMaterial::from(Color::PURPLE)),
+            transform: Transform::from_translation(Vec3::new(x, y, 0.)),
+            ..default()
+        });
+    }
 }
 
 fn instructions(game: Res<Game>) {
