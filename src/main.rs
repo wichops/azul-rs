@@ -1,6 +1,7 @@
 use bevy::app::App;
 use bevy::sprite::MaterialMesh2dBundle;
 
+use bevy::core_pipeline::clear_color::ClearColorConfig;
 use bevy::prelude::*;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
@@ -36,9 +37,10 @@ struct Bag {
     tiles: Vec<Tile>,
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Component, Debug, Default, Clone)]
 struct Factory {
     tiles: Vec<Tile>,
+    entity: Option<Entity>,
 }
 
 #[derive(Debug)]
@@ -136,6 +138,7 @@ fn select_factory(
 }
 
 fn select_color(
+    mut commands: Commands,
     mut keyboard_input: ResMut<Input<KeyCode>>,
     mut game: ResMut<Game>,
     mut next_state: ResMut<NextState<GameState>>,
@@ -174,6 +177,9 @@ fn select_color(
                 }
             }
 
+            if let Some(entity) = factory.entity {
+                commands.entity(entity).despawn_descendants();
+            }
             removed_tiles = factory.tiles.drain(..).collect();
 
             let player_index = game.player_index;
@@ -189,7 +195,7 @@ fn select_color(
         game.center.append(&mut removed_tiles);
         game.player_index += 1;
 
-        if game.player_index > game.players.len() {
+        if game.player_index >= game.players.len() {
             game.player_index = 0;
         }
 
@@ -197,12 +203,7 @@ fn select_color(
     }
 }
 
-fn setup(
-    mut commands: Commands,
-    mut game: ResMut<Game>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-) {
+fn setup(mut commands: Commands, mut game: ResMut<Game>) {
     let players_count = 2;
     let factories_count = match players_count {
         2 => 5,
@@ -239,22 +240,69 @@ fn setup(
     game.bag = Bag::default();
     game.bag.tiles = tiles;
 
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2dBundle {
+        camera_2d: Camera2d {
+            clear_color: ClearColorConfig::Custom(Color::BEIGE),
+        },
+        ..default()
+    });
+}
 
-    let step: f32 = 360.0 / factories_count as f32;
-    for (i, _) in game.factories[..].iter().enumerate() {
-        let radius: f32 = 200.0;
+fn draw_factories(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    mut game: ResMut<Game>,
+) {
+    let step: f32 = 360.0 / game.factories.len() as f32;
+
+    for (i, f) in game.factories[..].iter_mut().enumerate() {
+        info!("tiles {:?}", f.tiles);
+        let radius: f32 = 280.0;
         let angle = (step * i as f32).to_radians();
 
         let x = angle.cos() * radius;
         let y = angle.sin() * radius;
 
-        commands.spawn(MaterialMesh2dBundle {
-            mesh: meshes.add(shape::Circle::new(80.).into()).into(),
-            material: materials.add(ColorMaterial::from(Color::PURPLE)),
-            transform: Transform::from_translation(Vec3::new(x, y, 0.)),
-            ..default()
-        });
+        let parent = commands
+            .spawn(MaterialMesh2dBundle {
+                mesh: meshes.add(shape::Circle::new(80.).into()).into(),
+                material: materials.add(ColorMaterial::from(Color::GRAY)),
+                transform: Transform::from_translation(Vec3::new(x, y, 0.)),
+                ..default()
+            })
+            .id();
+
+        f.entity = Some(parent);
+
+        for (i, t) in f.tiles.iter().enumerate() {
+            let color = match t.color {
+                TileColor::White => Color::WHITE,
+                TileColor::Black => Color::BLACK,
+                TileColor::Red => Color::RED,
+                TileColor::Green => Color::GREEN,
+                TileColor::Blue => Color::BLUE,
+            };
+
+            let offset = 20.0;
+            let child = commands
+                .spawn(SpriteBundle {
+                    sprite: Sprite {
+                        color,
+                        custom_size: Some(Vec2::new(40.0, 40.0)),
+                        ..default()
+                    },
+                    transform: Transform::from_translation(Vec3::new(
+                        44.0 * (i / 2) as f32 - offset,
+                        44.0 * (i % 2) as f32 - offset,
+                        0.,
+                    )),
+                    ..default()
+                })
+                .id();
+
+            commands.entity(parent).add_child(child);
+        }
     }
 }
 
@@ -277,12 +325,20 @@ fn color_instructions(game: Res<Game>) {
 fn xd(game: Res<Game>) {
     dbg!("{}", game);
 }
+fn cursor_position(window: Query<&Window>) {
+    let window = window.single();
+
+    if let Some(position) = window.cursor_position() {
+        // info!("{:?}", position);
+    }
+}
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_state::<GameState>()
         .init_resource::<Game>()
-        .add_system(setup.on_startup())
+        .add_startup_systems((setup, draw_factories))
+        .add_system(cursor_position)
         .add_system(instructions.in_schedule(OnEnter(GameState::PickingFactory)))
         .add_system(select_factory.in_set(OnUpdate(GameState::PickingFactory)))
         .add_system(color_instructions.in_schedule(OnEnter(GameState::PickingColor)))
