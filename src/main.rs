@@ -271,8 +271,8 @@ fn draw_factories(mut commands: Commands, mut game: ResMut<Game>) {
 
     println!("fagtories {factories_count}");
     for i in 0..factories_count {
-        let radius: f32 = 280.0;
-        let angle = (step * i as f32).to_radians();
+        let radius: f32 = 260.0;
+        let angle = (step * i as f32).to_radians() + std::f32::consts::FRAC_PI_2;
 
         println!("{angle}, {i}");
         let x = angle.cos() * radius;
@@ -283,15 +283,21 @@ fn draw_factories(mut commands: Commands, mut game: ResMut<Game>) {
         };
 
         let parent = commands
-            .spawn((SpriteBundle {
-                sprite: Sprite {
-                    color: Color::GRAY,
-                    custom_size: Some(Vec2::splat(160.0)),
+            .spawn((
+                SpriteBundle {
+                    sprite: Sprite {
+                        color: Color::hex("#826f58").unwrap(),
+                        custom_size: Some(Vec2::splat(140.0)),
+                        ..default()
+                    },
+                    transform: Transform::from_translation(Vec3::new(x, y, 0.)),
                     ..default()
                 },
-                transform: Transform::from_translation(Vec3::new(x, y, 0.)),
-                ..default()
-            },))
+                FactoryBundle {
+                    factory: Factory(i),
+                    bag: bag.clone(),
+                },
+            ))
             .id();
 
         game.factories.push(parent);
@@ -327,13 +333,14 @@ fn draw_factories(mut commands: Commands, mut game: ResMut<Game>) {
     }
 }
 
-fn instructions(game: Res<Game>, factories_query: Query<(&Factory, &Bag)>) {
+fn instructions(game: Res<Game>, factories_query: Query<(&Factory, &Bag, &Transform)>) {
     println!("Player: {}", game.player_index + 1);
     println!("Select Factory 1 - 5");
 
-    for (f, bag) in factories_query.iter() {
+    for (f, bag, t) in factories_query.iter() {
         println!("Factory: {}", f.0);
         println!("{:?}", bag.tiles);
+        println!("{:?}", t.translation);
     }
 
     println!("Center:");
@@ -348,10 +355,32 @@ fn instructions(game: Res<Game>, factories_query: Query<(&Factory, &Bag)>) {
 fn xd(game: Res<Game>) {
     dbg!("{}", game);
 }
-fn cursor_position(window: Query<&Window>) {
-    let window = window.single();
 
-    if let Some(position) = window.cursor_position() {
-        // info!("{:?}", position);
+fn cursor_position(
+    camera_q: Query<(&Camera, &GlobalTransform)>,
+    mut factories: Query<(&Transform, &Factory, &mut Sprite)>,
+    window: Query<&Window>,
+    mouse_button_input: Res<Input<MouseButton>>,
+) {
+    let window = window.single();
+    let (camera, camera_transform) = camera_q.single();
+
+    if let Some(position) = window
+        .cursor_position()
+        .and_then(|cursor| camera.viewport_to_world(camera_transform, cursor))
+        .map(|ray| ray.origin.truncate())
+    {
+        for (t, f, mut s) in factories.iter_mut() {
+            let sprite_size = Vec2::splat(140.);
+            let sprite_position = t.translation;
+
+            let sprite_rect = Rect::from_center_size(sprite_position.truncate(), sprite_size);
+
+            if sprite_rect.contains(position) && mouse_button_input.just_pressed(MouseButton::Left)
+            {
+                s.color = Color::hex("#B99B6B").unwrap();
+                println!("Selected factory {:?}", f.0 + 1);
+            }
+        }
     }
 }
