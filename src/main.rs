@@ -42,10 +42,8 @@ fn main() {
         .add_state::<GameState>()
         .init_resource::<Game>()
         .add_startup_systems((setup, spawn_factories))
-        // .add_system(select_factory)
         .add_system(select_factory.in_set(OnUpdate(GameState::PickingFactory)))
-        // .add_system(color_instructions.in_schedule(OnEnter(GameState::PickingColor)))
-        // .add_system(select_color.in_set(OnUpdate(GameState::PickingColor)))
+        .add_system(select_color.in_set(OnUpdate(GameState::PickingColor)))
         .add_system(xd.in_schedule(OnExit(GameState::PickingColor)))
         .run();
 }
@@ -155,9 +153,10 @@ fn xd(game: Res<Game>) {
 
 fn select_factory(
     camera_q: Query<(&Camera, &GlobalTransform)>,
-    mut factories: Query<(&Transform, &Factory, &mut Sprite)>,
+    mut factories: Query<(&GlobalTransform, &Factory, &mut Sprite)>,
     window: Query<&Window>,
     mouse_button_input: Res<Input<MouseButton>>,
+    mut next_state: ResMut<NextState<GameState>>,
 ) {
     let window = window.single();
     let (camera, camera_transform) = camera_q.single();
@@ -169,7 +168,7 @@ fn select_factory(
     {
         for (t, f, mut s) in factories.iter_mut() {
             let sprite_size = Vec2::splat(140.);
-            let sprite_position = t.translation;
+            let sprite_position = t.translation();
 
             let sprite_rect = Rect::from_center_size(sprite_position.truncate(), sprite_size);
 
@@ -177,6 +176,36 @@ fn select_factory(
             {
                 s.color = Color::hex("#B99B6B").unwrap();
                 println!("Selected factory {:?}", f.0 + 1);
+                next_state.set(GameState::PickingColor);
+            }
+        }
+    }
+}
+
+fn select_color(
+    window: Query<&Window>,
+    camera_q: Query<(&Camera, &GlobalTransform)>,
+    mut factories: Query<(&GlobalTransform, &Tile, &mut Sprite)>,
+    mouse_button_input: Res<Input<MouseButton>>,
+    mut next_state: ResMut<NextState<GameState>>,
+) {
+    let window = window.single();
+    let (camera, camera_transform) = camera_q.single();
+
+    if let Some(position) = window
+        .cursor_position()
+        .and_then(|cursor| camera.viewport_to_world(camera_transform, cursor))
+        .map(|ray| ray.origin.truncate())
+    {
+        for (t, tile, _s) in factories.iter_mut() {
+            let sprite_size = Vec2::splat(40.);
+            let sprite_position = t.translation();
+
+            let sprite_rect = Rect::from_center_size(sprite_position.truncate(), sprite_size);
+
+            if sprite_rect.contains(position) && mouse_button_input.just_pressed(MouseButton::Left)
+            {
+                println!("Selected color {:?}", tile.color);
             }
         }
     }

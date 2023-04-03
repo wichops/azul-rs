@@ -42,8 +42,8 @@ pub fn spawn_factories(mut commands: Commands, mut game: ResMut<Game>) {
 
         game.factories.push(parent);
 
-        for (i, t) in bag.tiles.iter().enumerate() {
-            let color = match t.color {
+        for (i, tile) in bag.tiles.iter().enumerate() {
+            let color = match tile.color {
                 TileColor::White => Color::WHITE,
                 TileColor::Black => Color::BLACK,
                 TileColor::Red => Color::RED,
@@ -53,19 +53,22 @@ pub fn spawn_factories(mut commands: Commands, mut game: ResMut<Game>) {
 
             let offset = 20.0;
             let child = commands
-                .spawn(SpriteBundle {
-                    sprite: Sprite {
-                        color,
-                        custom_size: Some(Vec2::splat(40.0)),
+                .spawn((
+                    SpriteBundle {
+                        sprite: Sprite {
+                            color,
+                            custom_size: Some(Vec2::splat(40.0)),
+                            ..default()
+                        },
+                        transform: Transform::from_translation(Vec3::new(
+                            44.0 * (i / 2) as f32 - offset,
+                            44.0 * (i % 2) as f32 - offset,
+                            1.,
+                        )),
                         ..default()
                     },
-                    transform: Transform::from_translation(Vec3::new(
-                        44.0 * (i / 2) as f32 - offset,
-                        44.0 * (i % 2) as f32 - offset,
-                        1.,
-                    )),
-                    ..default()
-                })
+                    tile.to_owned(),
+                ))
                 .id();
 
             commands.entity(parent).add_child(child);

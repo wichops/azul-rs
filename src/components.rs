@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-#[derive(Component, Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum TileColor {
     Black,
     White,
@@ -10,7 +10,7 @@ pub enum TileColor {
     Blue,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Component, Debug, Clone)]
 pub struct Tile {
     pub color: TileColor,
 }
