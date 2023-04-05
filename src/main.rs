@@ -22,7 +22,7 @@ mod prelude {
 
     #[derive(Resource, Debug, Default)]
     pub struct Game {
-        pub players: Vec<Player>,
+        pub players: Vec<Entity>,
         pub factories: Vec<Entity>,
         pub center: Vec<Tile>,
         pub bag: Bag,
@@ -41,7 +41,8 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_state::<GameState>()
         .init_resource::<Game>()
-        .add_startup_systems((setup, spawn_factories))
+        .add_startup_systems((setup, spawn_factories, spawn_board.after(setup)))
+        .add_system(spawn_board.in_schedule(OnEnter(GameState::PickingFactory)))
         .add_system(select_factory.in_set(OnUpdate(GameState::PickingFactory)))
         .add_system(select_color.in_set(OnUpdate(GameState::PickingColor)))
         .add_system(xd.in_schedule(OnExit(GameState::PickingColor)))
@@ -115,7 +116,7 @@ fn main() {
 // }
 
 fn setup(mut commands: Commands, mut game: ResMut<Game>) {
-    let players_count = 2;
+    let players_count = 1;
 
     let mut tiles = [
         vec![Tile::new(TileColor::Red); TILES_PER_COLOR],
@@ -131,7 +132,10 @@ fn setup(mut commands: Commands, mut game: ResMut<Game>) {
 
     let mut players = Vec::with_capacity(players_count as usize);
     for p in 0..players_count {
-        players.push(Player::new(format!("Player {}", p + 1)));
+        let player = commands
+            .spawn(Player::new(format!("Player {}", p + 1)))
+            .id();
+        players.push(player);
     }
 
     game.players = players;

@@ -40,13 +40,27 @@ pub struct FactoryBundle {
     pub bag: Bag,
 }
 
-#[derive(Debug)]
+#[derive(Component, Default, Debug)]
+pub struct Board {
+    pub rows: [Vec<Option<Tile>>; 5],
+    pub floor: [[Option<Tile>; 5]; 5],
+}
+
+#[derive(Component, Default, Debug)]
 pub struct Player {
     pub name: String,
+    pub board: Board,
 }
 
 impl Player {
     pub fn new(name: String) -> Self {
-        Player { name }
+        let mut board = Board::default();
+        board.rows[0] = vec![None; 1];
+        board.rows[1] = vec![None; 2];
+        board.rows[2] = vec![None; 3];
+        board.rows[3] = vec![None; 4];
+        board.rows[4] = vec![None; 5];
+
+        Player { name, board }
     }
 }
